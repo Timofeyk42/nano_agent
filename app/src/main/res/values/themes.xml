@@ -1,0 +1,6 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <style name="Theme.NanoAgent" parent="android:Theme.Material.Light.NoActionBar">
+        <!-- We use Jetpack Compose for all UI, so parent can be standard Material -->
+    </style>
+</resources>
