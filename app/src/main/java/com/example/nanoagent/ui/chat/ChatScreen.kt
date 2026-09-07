@@ -68,7 +68,9 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
+import androidx.compose.ui.hapticfeedback.HapticFeedbackType
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.LocalHapticFeedback
 import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -89,12 +91,14 @@ fun ChatScreen(viewModel: AgentViewModel, modifier: Modifier = Modifier) {
     val drawerState = rememberDrawerState(DrawerValue.Closed)
     val listState = rememberLazyListState()
     val scope = rememberCoroutineScope()
+    val haptic = LocalHapticFeedback.current
     var input by remember { mutableStateOf("") }
     var showSettings by remember { mutableStateOf(false) }
     var sessionToDelete by remember { mutableStateOf<ChatSession?>(null) }
 
     val send = {
         if (input.isNotBlank() && !isGenerating) {
+            haptic.performHapticFeedback(HapticFeedbackType.TextHandleMove)
             viewModel.sendMessage(input.trim())
             input = ""
         }
@@ -111,10 +115,12 @@ fun ChatScreen(viewModel: AgentViewModel, modifier: Modifier = Modifier) {
                 selectedSessionId = currentSessionId,
                 language = language,
                 onNewChat = {
+                    haptic.performHapticFeedback(HapticFeedbackType.TextHandleMove)
                     viewModel.startNewChat()
                     scope.launch { drawerState.close() }
                 },
                 onOpenSession = {
+                    haptic.performHapticFeedback(HapticFeedbackType.TextHandleMove)
                     viewModel.loadSession(it)
                     scope.launch { drawerState.close() }
                 },
@@ -139,7 +145,10 @@ fun ChatScreen(viewModel: AgentViewModel, modifier: Modifier = Modifier) {
                         }
                     },
                     actions = {
-                        IconButton(onClick = { showSettings = true }) {
+                        IconButton(onClick = {
+                            haptic.performHapticFeedback(HapticFeedbackType.TextHandleMove)
+                            showSettings = true
+                        }) {
                             Icon(Icons.Default.Settings, contentDescription = localized(language, "Настройки", "Settings"))
                         }
                     },
@@ -196,7 +205,11 @@ fun ChatScreen(viewModel: AgentViewModel, modifier: Modifier = Modifier) {
             onDismissRequest = { sessionToDelete = null },
             title = { Text(localized(language, "Удалить чат?", "Delete chat?")) },
             text = { Text(localized(language, "История этого чата будет удалена без возможности восстановления.", "This chat history will be permanently removed.")) },
-            confirmButton = { TextButton(onClick = { viewModel.deleteSession(session.sessionId); sessionToDelete = null }) { Text(localized(language, "Удалить", "Delete")) } },
+            confirmButton = { TextButton(onClick = {
+                haptic.performHapticFeedback(HapticFeedbackType.LongPress)
+                viewModel.deleteSession(session.sessionId)
+                sessionToDelete = null
+            }) { Text(localized(language, "Удалить", "Delete")) } },
             dismissButton = { TextButton(onClick = { sessionToDelete = null }) { Text(localized(language, "Отмена", "Cancel")) } }
         )
     }
