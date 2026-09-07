@@ -44,7 +44,7 @@ class AgentViewModel(application: Application) : AndroidViewModel(application) {
     private val app = application as NanoAgentApp
     private val client = GeminiNanoClient(app)
     private val registry = ToolRegistry(app, app.database.knowledgeBaseDao())
-    val engine = AgentEngine(client, registry)
+    private val engine = AgentEngine(client, registry)
 
     private val _messages = MutableStateFlow<List<ChatMessage>>(emptyList())
     val messages: StateFlow<List<ChatMessage>> = _messages.asStateFlow()
@@ -62,10 +62,14 @@ class AgentViewModel(application: Application) : AndroidViewModel(application) {
     val currentSessionId: StateFlow<String?> = _currentSessionId.asStateFlow()
 
     // Configuration / Settings flows
-    val temperature = MutableStateFlow(0.4f)
-    val thinkingDepth = MutableStateFlow(5) // Max agent iterations (1 to 10)
-    val modelLanguage = MutableStateFlow("Russian") // Russian / English
-    val interfaceLanguage = MutableStateFlow("Russian") // Russian / English
+    private val _temperature = MutableStateFlow(0.4f)
+    val temperature: StateFlow<Float> = _temperature.asStateFlow()
+    private val _thinkingDepth = MutableStateFlow(5)
+    val thinkingDepth: StateFlow<Int> = _thinkingDepth.asStateFlow()
+    private val _modelLanguage = MutableStateFlow("Russian")
+    val modelLanguage: StateFlow<String> = _modelLanguage.asStateFlow()
+    private val _interfaceLanguage = MutableStateFlow("Russian")
+    val interfaceLanguage: StateFlow<String> = _interfaceLanguage.asStateFlow()
 
     val wikiEntries = app.database.knowledgeBaseDao().getAllEntriesFlow()
 
@@ -84,28 +88,30 @@ class AgentViewModel(application: Application) : AndroidViewModel(application) {
 
     // Settings adjustments
     fun setModelTemperature(temp: Float) {
-        temperature.value = temp
-        client.temperature = temp
+        val bounded = temp.coerceIn(0f, 1f)
+        _temperature.value = bounded
+        client.temperature = bounded
     }
 
     fun setModelThinkingDepth(depth: Int) {
-        thinkingDepth.value = depth
-        engine.maxIterations = depth
+        val bounded = depth.coerceIn(1, 10)
+        _thinkingDepth.value = bounded
+        engine.maxIterations = bounded
     }
 
     fun setModelLang(lang: String) {
-        modelLanguage.value = lang
+        _modelLanguage.value = lang
         engine.targetLanguage = lang
     }
 
     fun setInterfaceLang(lang: String) {
-        interfaceLanguage.value = lang
+        _interfaceLanguage.value = lang
     }
 
     // Chat sessions lifecycle
     fun startNewChat() {
         viewModelScope.launch {
-            val defaultTitle = if (interfaceLanguage.value == "Russian") "Новый чат" else "New Chat"
+            val defaultTitle = if (_interfaceLanguage.value == "Russian") "Новый чат" else "New Chat"
             val newSession = ChatSession(title = defaultTitle)
             app.database.chatHistoryDao().insertSession(newSession)
             _currentSessionId.value = newSession.sessionId
@@ -132,8 +138,7 @@ class AgentViewModel(application: Application) : AndroidViewModel(application) {
 
     fun deleteSession(sessionId: String) {
         viewModelScope.launch {
-            app.database.chatHistoryDao().deleteSessionById(sessionId)
-            app.database.chatHistoryDao().deleteMessagesBySessionId(sessionId)
+            app.database.chatHistoryDao().deleteSession(sessionId)
             if (_currentSessionId.value == sessionId) {
                 // If active session was deleted, start new one
                 val allSessions = chatSessions.first()
@@ -148,7 +153,7 @@ class AgentViewModel(application: Application) : AndroidViewModel(application) {
     }
 
     fun sendMessage(text: String) {
-        if (text.isBlank()) return
+        if (text.isBlank() || _isGenerating.value) return
 
         val sessionId = _currentSessionId.value ?: return
 
@@ -224,8 +229,9 @@ class AgentViewModel(application: Application) : AndroidViewModel(application) {
                     }
                 }
             } catch (e: Exception) {
-                val failMsg = ChatMessage(id = agentMsgId, sender = Sender.AGENT, content = "Execution failed: ${e.message}", steps = steps.toList())
-                updateAgentMessage(agentMsgId, "Execution failed: ${e.message}", steps)
+                val message = e.message ?: "Unknown error"
+                val failMsg = ChatMessage(id = agentMsgId, sender = Sender.AGENT, content = "Execution failed: $message", steps = steps.toList())
+                updateAgentMessage(agentMsgId, "Execution failed: $message", steps)
                 saveMessageToDb(sessionId, failMsg)
             } finally {
                 _isGenerating.value = false

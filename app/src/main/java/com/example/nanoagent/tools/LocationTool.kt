@@ -44,7 +44,7 @@ class LocationTool(private val context: Context) : Tool {
                 }
                 "Latitude: $lat, Longitude: $lng, City: $cityName"
             } else {
-                "Latitude: 55.7558, Longitude: 37.6173, City: Moscow (Fallback - location sensor turned off)"
+                "ERROR: No recent location is available. Turn on location services and try again."
             }
         } catch (e: Exception) {
             "ERROR: Could not fetch location details: ${e.message}"
@@ -60,4 +60,5 @@ private suspend fun <T> Task<T>.await(): T = suspendCancellableCoroutine { conti
             continuation.resumeWithException(task.exception ?: RuntimeException("Task failed"))
         }
     }
+    continuation.invokeOnCancellation { /* Google Play services task cannot be cancelled reliably. */ }
 }

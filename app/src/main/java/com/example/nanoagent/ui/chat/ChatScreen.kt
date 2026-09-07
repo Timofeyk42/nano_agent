@@ -1,32 +1,75 @@
 package com.example.nanoagent.ui.chat
 
 import androidx.compose.animation.AnimatedVisibility
-import androidx.compose.animation.core.RepeatMode
-import androidx.compose.animation.core.animateFloat
-import androidx.compose.animation.core.infiniteRepeatable
-import androidx.compose.animation.core.rememberInfiniteTransition
-import androidx.compose.animation.core.tween
-import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
-import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.imePadding
+import androidx.compose.foundation.layout.navigationBarsPadding
+import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.layout.widthIn
+import androidx.compose.foundation.text.KeyboardActions
+import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.rememberLazyListState
-import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.*
-import androidx.compose.material3.*
-import androidx.compose.runtime.*
+import androidx.compose.material.icons.automirrored.filled.List
+import androidx.compose.material.icons.automirrored.filled.Send
+import androidx.compose.material.icons.filled.Add
+import androidx.compose.material.icons.filled.ArrowDropDown
+import androidx.compose.material.icons.filled.Build
+import androidx.compose.material.icons.filled.Delete
+import androidx.compose.material.icons.filled.Info
+import androidx.compose.material.icons.filled.KeyboardArrowUp
+import androidx.compose.material.icons.filled.Menu
+import androidx.compose.material.icons.filled.PlayArrow
+import androidx.compose.material.icons.filled.Settings
+import androidx.compose.material3.AlertDialog
+import androidx.compose.material3.AssistChip
+import androidx.compose.material3.Card
+import androidx.compose.material3.CardDefaults
+import androidx.compose.material3.CenterAlignedTopAppBar
+import androidx.compose.material3.CircularProgressIndicator
+import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.material3.FilterChip
+import androidx.compose.material3.HorizontalDivider
+import androidx.compose.material3.Icon
+import androidx.compose.material3.IconButton
+import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.ModalDrawerSheet
+import androidx.compose.material3.ModalNavigationDrawer
+import androidx.compose.material3.NavigationDrawerItem
+import androidx.compose.material3.OutlinedButton
+import androidx.compose.material3.Slider
+import androidx.compose.material3.Surface
+import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
+import androidx.compose.material3.TextField
+import androidx.compose.material3.TextFieldDefaults
+import androidx.compose.material3.TopAppBarDefaults
+import androidx.compose.material3.rememberDrawerState
+import androidx.compose.material3.DrawerValue
+import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.collectAsState
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.draw.alpha
-import androidx.compose.ui.draw.clip
-import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.graphics.vector.ImageVector
-import androidx.compose.ui.hapticfeedback.HapticFeedbackType
-import androidx.compose.ui.platform.LocalHapticFeedback
+import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.example.nanoagent.data.ChatSession
@@ -34,475 +77,163 @@ import kotlinx.coroutines.launch
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-fun ChatScreen(
-    viewModel: AgentViewModel,
-    modifier: Modifier = Modifier
-) {
+fun ChatScreen(viewModel: AgentViewModel, modifier: Modifier = Modifier) {
     val messages by viewModel.messages.collectAsState()
     val isGenerating by viewModel.isGenerating.collectAsState()
-    val aiCoreStatus by viewModel.aiCoreStatus.collectAsState()
-    val chatSessions by viewModel.chatSessions.collectAsState(emptyList())
+    val status by viewModel.aiCoreStatus.collectAsState()
+    val sessions by viewModel.chatSessions.collectAsState(emptyList())
     val currentSessionId by viewModel.currentSessionId.collectAsState()
-
-    val interfaceLang by viewModel.interfaceLanguage.collectAsState()
-    val thinkingDepth by viewModel.thinkingDepth.collectAsState()
+    val language by viewModel.interfaceLanguage.collectAsState()
     val temperature by viewModel.temperature.collectAsState()
-
+    val thinkingDepth by viewModel.thinkingDepth.collectAsState()
+    val drawerState = rememberDrawerState(DrawerValue.Closed)
     val listState = rememberLazyListState()
-    val drawerState = rememberDrawerState(initialValue = DrawerValue.Closed)
-    val coroutineScope = rememberCoroutineScope()
-    
-    // Haptic feedback provider (we use TextHandleMove for soft ticks/vibrations)
-    val haptic = LocalHapticFeedback.current
+    val scope = rememberCoroutineScope()
+    var input by remember { mutableStateOf("") }
+    var showSettings by remember { mutableStateOf(false) }
+    var sessionToDelete by remember { mutableStateOf<ChatSession?>(null) }
 
-    var textInput by remember { mutableStateOf("") }
-    var showSettingsDialog by remember { mutableStateOf(false) }
-
-    // Auto scroll to bottom when new messages arrive
-    LaunchedEffect(messages.size) {
-        if (messages.isNotEmpty()) {
-            listState.animateScrollToItem(messages.size - 1)
+    val send = {
+        if (input.isNotBlank() && !isGenerating) {
+            viewModel.sendMessage(input.trim())
+            input = ""
         }
+    }
+    LaunchedEffect(messages.size) {
+        if (messages.isNotEmpty()) listState.animateScrollToItem(messages.lastIndex)
     }
 
     ModalNavigationDrawer(
         drawerState = drawerState,
         drawerContent = {
-            ModalDrawerSheet(
-                modifier = Modifier
-                    .fillMaxHeight()
-                    .width(300.dp)
-            ) {
-                Column(
-                    modifier = Modifier
-                        .fillMaxSize()
-                        .padding(16.dp)
-                ) {
-                    // Header: Icon & Title ("Gemini Nano")
-                    Row(
-                        verticalAlignment = Alignment.CenterVertically,
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .padding(bottom = 16.dp)
-                    ) {
-                        Surface(
-                            color = MaterialTheme.colorScheme.primaryContainer,
-                            shape = RoundedCornerShape(8.dp),
-                            modifier = Modifier.size(40.dp)
-                        ) {
-                            Box(contentAlignment = Alignment.Center) {
-                                Icon(
-                                    imageVector = Icons.Default.KeyboardArrowUp, 
-                                    contentDescription = "Unstrack Logo",
-                                    tint = MaterialTheme.colorScheme.primary
-                                )
-                            }
-                        }
-                        Spacer(modifier = Modifier.width(12.dp))
-                        Column {
-                            Text(
-                                text = "Gemini Nano",
-                                style = MaterialTheme.typography.titleMedium,
-                                color = MaterialTheme.colorScheme.onSurface
-                            )
-                            Text(
-                                text = "On-Device Engine",
-                                style = MaterialTheme.typography.labelSmall,
-                                color = MaterialTheme.colorScheme.onSurfaceVariant
-                            )
-                        }
-                    }
-
-                    HorizontalDivider()
-                    Spacer(modifier = Modifier.height(12.dp))
-
-                    // "New Chat" Button
-                    Button(
-                        onClick = {
-                            haptic.performHapticFeedback(HapticFeedbackType.TextHandleMove)
-                            viewModel.startNewChat()
-                            coroutineScope.launch { drawerState.close() }
-                        },
-                        modifier = Modifier.fillMaxWidth(),
-                        colors = ButtonDefaults.buttonColors(
-                            containerColor = MaterialTheme.colorScheme.primaryContainer,
-                            contentColor = MaterialTheme.colorScheme.onPrimaryContainer
-                        )
-                    ) {
-                        Icon(imageVector = Icons.Default.Add, contentDescription = null)
-                        Spacer(modifier = Modifier.width(8.dp))
-                        Text(if (interfaceLang == "Russian") "Новый чат" else "New Chat")
-                    }
-
-                    Spacer(modifier = Modifier.height(16.dp))
-
-                    Text(
-                        text = if (interfaceLang == "Russian") "История чатов" else "Chat History",
-                        style = MaterialTheme.typography.labelMedium,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant,
-                        modifier = Modifier.padding(bottom = 8.dp)
-                    )
-
-                    // Chat History List
-                    LazyColumn(
-                        modifier = Modifier
-                            .weight(1f)
-                            .fillMaxWidth(),
-                        verticalArrangement = Arrangement.spacedBy(4.dp)
-                    ) {
-                        items(chatSessions) { session ->
-                            val isSelected = session.sessionId == currentSessionId
-                            Row(
-                                modifier = Modifier
-                                    .fillMaxWidth()
-                                    .clip(RoundedCornerShape(8.dp))
-                                    .background(
-                                        if (isSelected) MaterialTheme.colorScheme.secondaryContainer 
-                                        else Color.Transparent
-                                    )
-                                    .clickable {
-                                        haptic.performHapticFeedback(HapticFeedbackType.TextHandleMove)
-                                        viewModel.loadSession(session.sessionId)
-                                        coroutineScope.launch { drawerState.close() }
-                                    }
-                                    .padding(horizontal = 12.dp, vertical = 8.dp),
-                                verticalAlignment = Alignment.CenterVertically,
-                                horizontalArrangement = Arrangement.SpaceBetween
-                            ) {
-                                Row(
-                                    verticalAlignment = Alignment.CenterVertically,
-                                    modifier = Modifier.weight(1f)
-                                ) {
-                                    Icon(
-                                        imageVector = Icons.Default.List,
-                                        contentDescription = null,
-                                        tint = if (isSelected) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant,
-                                        modifier = Modifier.size(18.dp)
-                                    )
-                                    Spacer(modifier = Modifier.width(8.dp))
-                                    Text(
-                                        text = session.title,
-                                        style = MaterialTheme.typography.bodyMedium,
-                                        maxLines = 1,
-                                        color = if (isSelected) MaterialTheme.colorScheme.onSecondaryContainer else MaterialTheme.colorScheme.onSurface
-                                    )
-                                }
-                                
-                                IconButton(
-                                    onClick = { 
-                                        haptic.performHapticFeedback(HapticFeedbackType.TextHandleMove)
-                                        viewModel.deleteSession(session.sessionId) 
-                                    },
-                                    modifier = Modifier.size(24.dp)
-                                ) {
-                                    Icon(
-                                        imageVector = Icons.Default.Delete,
-                                        contentDescription = "Delete",
-                                        tint = MaterialTheme.colorScheme.error,
-                                        modifier = Modifier.size(16.dp)
-                                    )
-                                }
-                            }
-                        }
-                    }
-                }
-            }
+            AppDrawer(
+                sessions = sessions,
+                selectedSessionId = currentSessionId,
+                language = language,
+                onNewChat = {
+                    viewModel.startNewChat()
+                    scope.launch { drawerState.close() }
+                },
+                onOpenSession = {
+                    viewModel.loadSession(it)
+                    scope.launch { drawerState.close() }
+                },
+                onDeleteSession = { sessionToDelete = it }
+            )
         }
     ) {
-        Scaffold(
+        androidx.compose.material3.Scaffold(
+            modifier = modifier,
             topBar = {
-                TopAppBar(
+                CenterAlignedTopAppBar(
                     title = {
-                        Column {
-                            Text(
-                                text = "Nano Agent",
-                                style = MaterialTheme.typography.titleMedium
-                            )
-                            Text(
-                                text = aiCoreStatus,
-                                style = MaterialTheme.typography.labelSmall,
-                                color = MaterialTheme.colorScheme.onSurfaceVariant
-                            )
+                        Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                            Text("Nano Agent", style = MaterialTheme.typography.titleLarge)
+                            Text(status, style = MaterialTheme.typography.labelSmall,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant, maxLines = 1)
                         }
                     },
                     navigationIcon = {
-                        IconButton(onClick = { 
-                            haptic.performHapticFeedback(HapticFeedbackType.TextHandleMove)
-                            coroutineScope.launch { drawerState.open() } 
-                        }) {
-                            Icon(
-                                imageVector = Icons.Default.Menu,
-                                contentDescription = "Menu"
-                            )
+                        IconButton(onClick = { scope.launch { drawerState.open() } }) {
+                            Icon(Icons.Default.Menu, contentDescription = localized(language, "Открыть чаты", "Open chats"))
                         }
                     },
                     actions = {
-                        IconButton(onClick = { 
-                            haptic.performHapticFeedback(HapticFeedbackType.TextHandleMove)
-                            showSettingsDialog = true 
-                        }) {
-                            Icon(imageVector = Icons.Default.Settings, contentDescription = "Settings")
+                        IconButton(onClick = { showSettings = true }) {
+                            Icon(Icons.Default.Settings, contentDescription = localized(language, "Настройки", "Settings"))
                         }
                     },
-                    colors = TopAppBarDefaults.topAppBarColors(
-                        containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f)
+                    colors = TopAppBarDefaults.centerAlignedTopAppBarColors(
+                        containerColor = MaterialTheme.colorScheme.surface
                     )
                 )
+            },
+            bottomBar = {
+                Composer(
+                    value = input,
+                    isGenerating = isGenerating,
+                    language = language,
+                    onValueChange = { input = it },
+                    onSend = send
+                )
             }
-        ) { paddingValues ->
-            Column(
-                modifier = modifier
-                    .fillMaxSize()
-                    .padding(paddingValues)
-            ) {
-                // Messages list
+        ) { padding ->
+            if (messages.isEmpty()) {
+                EmptyConversation(
+                    language = language,
+                    modifier = Modifier.padding(padding),
+                    onSuggestion = { input = it }
+                )
+            } else {
                 LazyColumn(
                     state = listState,
-                    modifier = Modifier
-                        .weight(1f)
-                        .fillMaxWidth()
-                        .padding(horizontal = 16.dp),
-                    verticalArrangement = Arrangement.spacedBy(12.dp)
+                    modifier = Modifier.fillMaxSize().padding(padding).padding(horizontal = 16.dp),
+                    verticalArrangement = Arrangement.spacedBy(14.dp)
                 ) {
-                    item { Spacer(modifier = Modifier.height(16.dp)) }
-
-                    items(messages) { message ->
-                        MessageBubble(message, interfaceLang)
-                    }
-
-                    if (isGenerating && messages.none { it.sender == Sender.AGENT && it.content == "Thinking..." }) {
-                        item {
-                            LoadingBubble()
-                        }
-                    }
-
-                    item { Spacer(modifier = Modifier.height(16.dp)) }
-                }
-
-                // Input bar (transparent background container)
-                Box(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .background(Color.Transparent)
-                ) {
-                    Row(
-                        modifier = Modifier
-                            .navigationBarsPadding()
-                            .imePadding()
-                            .padding(bottom = 0.dp, start = 12.dp, end = 12.dp, top = 12.dp)
-                            .fillMaxWidth(),
-                        verticalAlignment = Alignment.CenterVertically
-                    ) {
-                        OutlinedTextField(
-                            value = textInput,
-                            onValueChange = { textInput = it },
-                            placeholder = { Text(if (interfaceLang == "Russian") "Спросить локального агента..." else "Ask local agent...") },
-                            modifier = Modifier.weight(1f),
-                            shape = RoundedCornerShape(12.dp),
-                            colors = OutlinedTextFieldDefaults.colors(
-                                focusedBorderColor = MaterialTheme.colorScheme.primary,
-                                unfocusedBorderColor = MaterialTheme.colorScheme.outline
-                            ),
-                            maxLines = 4
-                        )
-
-                        Spacer(modifier = Modifier.width(8.dp))
-
-                        // Custom shaped Send Button (matching 12.dp rounded corners)
-                        Box(
-                            modifier = Modifier
-                                .size(48.dp)
-                                .clip(RoundedCornerShape(12.dp))
-                                .background(
-                                    if (textInput.isNotBlank() && !isGenerating) MaterialTheme.colorScheme.primaryContainer
-                                    else MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f)
-                                )
-                                .clickable(
-                                    enabled = textInput.isNotBlank() && !isGenerating,
-                                    onClick = {
-                                        haptic.performHapticFeedback(HapticFeedbackType.TextHandleMove)
-                                        viewModel.sendMessage(textInput)
-                                        textInput = ""
-                                    }
-                                ),
-                            contentAlignment = Alignment.Center
-                        ) {
-                            Icon(
-                                imageVector = Icons.Default.Send,
-                                contentDescription = "Send request",
-                                tint = if (textInput.isNotBlank() && !isGenerating) MaterialTheme.colorScheme.onPrimaryContainer
-                                       else MaterialTheme.colorScheme.onSurface.copy(alpha = 0.38f)
-                            )
-                        }
-                    }
+                    item { Spacer(Modifier.height(8.dp)) }
+                    items(messages, key = { it.id }) { message -> MessageBubble(message, language) }
+                    if (isGenerating) item { GeneratingIndicator(language) }
+                    item { Spacer(Modifier.height(8.dp)) }
                 }
             }
         }
     }
 
-    if (showSettingsDialog) {
-        AlertDialog(
-            onDismissRequest = { showSettingsDialog = false },
-            title = {
-                Text(if (interfaceLang == "Russian") "Параметры агента" else "Agent Parameters")
-            },
-            text = {
-                Column(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .verticalScroll(rememberScrollState()),
-                    verticalArrangement = Arrangement.spacedBy(16.dp)
-                ) {
-                    // Temperature Setting
-                    Column {
-                        Row(
-                            modifier = Modifier.fillMaxWidth(),
-                            horizontalArrangement = Arrangement.SpaceBetween
-                        ) {
-                            Text(
-                                text = if (interfaceLang == "Russian") "Температура" else "Temperature",
-                                style = MaterialTheme.typography.bodyMedium
-                            )
-                            Text(
-                                text = String.format("%.2f", temperature),
-                                style = MaterialTheme.typography.bodyMedium,
-                                color = MaterialTheme.colorScheme.primary
-                            )
-                        }
-                        Slider(
-                            value = temperature,
-                            onValueChange = { newValue ->
-                                val rounded = (newValue * 10).toInt()
-                                val currentRounded = (temperature * 10).toInt()
-                                if (rounded != currentRounded) {
-                                    haptic.performHapticFeedback(HapticFeedbackType.TextHandleMove)
-                                }
-                                viewModel.setModelTemperature(newValue)
-                            },
-                            valueRange = 0f..1f,
-                            steps = 10
-                        )
-                    }
-
-                    // Thinking depth Setting
-                    Column {
-                        Row(
-                            modifier = Modifier.fillMaxWidth(),
-                            horizontalArrangement = Arrangement.SpaceBetween
-                        ) {
-                            Text(
-                                text = if (interfaceLang == "Russian") "Глубина размышлений (шагов)" else "Thinking Depth (steps)",
-                                style = MaterialTheme.typography.bodyMedium
-                            )
-                            Text(
-                                text = "$thinkingDepth",
-                                style = MaterialTheme.typography.bodyMedium,
-                                color = MaterialTheme.colorScheme.primary
-                            )
-                        }
-                        Slider(
-                            value = thinkingDepth.toFloat(),
-                            onValueChange = { newValue ->
-                                val newInt = newValue.toInt()
-                                if (newInt != thinkingDepth) {
-                                    haptic.performHapticFeedback(HapticFeedbackType.TextHandleMove)
-                                    viewModel.setModelThinkingDepth(newInt)
-                                }
-                            },
-                            valueRange = 1f..10f,
-                            steps = 8
-                        )
-                    }
-
-                    // Unified Language Setting
-                    Column {
-                        Text(
-                            text = if (interfaceLang == "Russian") "Язык интерфейса и модели" else "Interface & Model Language",
-                            style = MaterialTheme.typography.bodyMedium,
-                            modifier = Modifier.padding(bottom = 6.dp)
-                        )
-                        Row(
-                            horizontalArrangement = Arrangement.spacedBy(8.dp)
-                        ) {
-                            FilterChip(
-                                selected = interfaceLang == "Russian",
-                                onClick = { 
-                                    haptic.performHapticFeedback(HapticFeedbackType.TextHandleMove)
-                                    viewModel.setInterfaceLang("Russian") 
-                                    viewModel.setModelLang("Russian")
-                                },
-                                label = { Text("Русский") }
-                            )
-                            FilterChip(
-                                selected = interfaceLang == "English",
-                                onClick = { 
-                                    haptic.performHapticFeedback(HapticFeedbackType.TextHandleMove)
-                                    viewModel.setInterfaceLang("English") 
-                                    viewModel.setModelLang("English")
-                                },
-                                label = { Text("English") }
-                            )
-                        }
-                    }
-                }
-            },
-            confirmButton = {
-                TextButton(onClick = { 
-                    haptic.performHapticFeedback(HapticFeedbackType.TextHandleMove)
-                    showSettingsDialog = false 
-                }) {
-                    Text(if (interfaceLang == "Russian") "Готово" else "Done")
-                }
+    if (showSettings) {
+        SettingsDialog(
+            language = language, temperature = temperature, thinkingDepth = thinkingDepth,
+            onDismiss = { showSettings = false },
+            onTemperatureChange = viewModel::setModelTemperature,
+            onDepthChange = viewModel::setModelThinkingDepth,
+            onLanguageChange = {
+                viewModel.setInterfaceLang(it)
+                viewModel.setModelLang(it)
             }
+        )
+    }
+    sessionToDelete?.let { session ->
+        AlertDialog(
+            onDismissRequest = { sessionToDelete = null },
+            title = { Text(localized(language, "Удалить чат?", "Delete chat?")) },
+            text = { Text(localized(language, "История этого чата будет удалена без возможности восстановления.", "This chat history will be permanently removed.")) },
+            confirmButton = { TextButton(onClick = { viewModel.deleteSession(session.sessionId); sessionToDelete = null }) { Text(localized(language, "Удалить", "Delete")) } },
+            dismissButton = { TextButton(onClick = { sessionToDelete = null }) { Text(localized(language, "Отмена", "Cancel")) } }
         )
     }
 }
 
 @Composable
-fun MessageBubble(message: ChatMessage, interfaceLang: String) {
-    val isUser = message.sender == Sender.USER
-    val alignment = if (isUser) Alignment.End else Alignment.Start
-    val containerColor = if (isUser) {
-        MaterialTheme.colorScheme.primary
-    } else {
-        MaterialTheme.colorScheme.secondaryContainer
-    }
-    val contentColor = if (isUser) {
-        MaterialTheme.colorScheme.onPrimary
-    } else {
-        MaterialTheme.colorScheme.onSecondaryContainer
-    }
-
-    val bubbleShape = if (isUser) {
-        RoundedCornerShape(16.dp, 16.dp, 4.dp, 16.dp)
-    } else {
-        RoundedCornerShape(16.dp, 16.dp, 16.dp, 4.dp)
-    }
-
-    Column(
-        modifier = Modifier.fillMaxWidth(),
-        horizontalAlignment = alignment
-    ) {
-        // Unified Thinking Card containing all steps
-        if (message.steps.isNotEmpty()) {
-            ThinkingHistoryCard(steps = message.steps, interfaceLang = interfaceLang)
-            Spacer(modifier = Modifier.height(8.dp))
-        }
-
-        // Final content bubble (only shown if not blank)
-        if (message.content.isNotBlank()) {
-            Surface(
-                color = containerColor,
-                contentColor = contentColor,
-                shape = bubbleShape,
-                tonalElevation = if (isUser) 0.dp else 2.dp,
-                modifier = Modifier.widthIn(max = 300.dp)
-            ) {
-                Column(modifier = Modifier.padding(12.dp)) {
-                    Text(
-                        text = message.content,
-                        style = MaterialTheme.typography.bodyMedium,
-                        lineHeight = 20.sp
+private fun AppDrawer(
+    sessions: List<ChatSession>, selectedSessionId: String?, language: String,
+    onNewChat: () -> Unit, onOpenSession: (String) -> Unit, onDeleteSession: (ChatSession) -> Unit
+) {
+    ModalDrawerSheet(modifier = Modifier.width(320.dp)) {
+        Column(Modifier.fillMaxSize().padding(16.dp)) {
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Surface(shape = RoundedCornerShape(16.dp), color = MaterialTheme.colorScheme.primaryContainer, modifier = Modifier.size(48.dp)) {
+                    Box(contentAlignment = Alignment.Center) { Icon(Icons.Default.KeyboardArrowUp, null, tint = MaterialTheme.colorScheme.onPrimaryContainer) }
+                }
+                Spacer(Modifier.width(12.dp))
+                Column {
+                    Text("Nano Agent", style = MaterialTheme.typography.titleLarge)
+                    Text("On-device assistant", style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                }
+            }
+            Spacer(Modifier.height(20.dp))
+            OutlinedButton(onClick = onNewChat, modifier = Modifier.fillMaxWidth()) {
+                Icon(Icons.Default.Add, null); Spacer(Modifier.width(8.dp)); Text(localized(language, "Новый чат", "New chat"))
+            }
+            Spacer(Modifier.height(20.dp))
+            Text(localized(language, "НЕДАВНИЕ ЧАТЫ", "RECENT CHATS"), style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
+            Spacer(Modifier.height(8.dp))
+            LazyColumn(verticalArrangement = Arrangement.spacedBy(4.dp), modifier = Modifier.weight(1f)) {
+                items(sessions, key = { it.sessionId }) { session ->
+                    NavigationDrawerItem(
+                        label = { Text(session.title, maxLines = 1) },
+                        selected = session.sessionId == selectedSessionId,
+                        onClick = { onOpenSession(session.sessionId) },
+                        icon = { Icon(Icons.AutoMirrored.Filled.List, null) },
+                        badge = { IconButton(onClick = { onDeleteSession(session) }) { Icon(Icons.Default.Delete, localized(language, "Удалить", "Delete"), tint = MaterialTheme.colorScheme.onSurfaceVariant) } }
                     )
                 }
             }
@@ -511,97 +242,86 @@ fun MessageBubble(message: ChatMessage, interfaceLang: String) {
 }
 
 @Composable
-fun ThinkingHistoryCard(steps: List<AgentStep>, interfaceLang: String) {
-    var expanded by remember { mutableStateOf(false) }
-    val haptic = LocalHapticFeedback.current
-
-    Card(
-        colors = CardDefaults.cardColors(
-            containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.6f)
-        ),
-        shape = RoundedCornerShape(12.dp),
-        modifier = Modifier
-            .fillMaxWidth(0.9f)
-            .clickable { 
-                haptic.performHapticFeedback(HapticFeedbackType.TextHandleMove)
-                expanded = !expanded 
-            }
+private fun EmptyConversation(language: String, modifier: Modifier, onSuggestion: (String) -> Unit) {
+    val suggestions = if (language == "Russian") listOf("Который сейчас час?", "Какая погода сегодня?", "Вычисли 36 × 14") else listOf("What time is it?", "What's the weather today?", "Calculate 36 × 14")
+    Column(
+        modifier = modifier.fillMaxSize().padding(horizontal = 28.dp),
+        verticalArrangement = Arrangement.Center,
+        horizontalAlignment = Alignment.CenterHorizontally
     ) {
-        Column(modifier = Modifier.padding(12.dp)) {
-            Row(
-                verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.SpaceBetween,
-                modifier = Modifier.fillMaxWidth()
-            ) {
-                Row(verticalAlignment = Alignment.CenterVertically) {
-                    Icon(
-                        imageVector = Icons.Default.Info, 
-                        contentDescription = null,
-                        tint = MaterialTheme.colorScheme.primary,
-                        modifier = Modifier.size(18.dp)
-                    )
-                    Spacer(modifier = Modifier.width(8.dp))
-                    Text(
-                        text = if (interfaceLang == "Russian") "Ход мыслей (${steps.size})" else "Thinking (${steps.size} steps)",
-                        style = MaterialTheme.typography.labelLarge,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant
-                    )
-                }
-                Icon(
-                    imageVector = if (expanded) Icons.Default.KeyboardArrowUp else Icons.Default.ArrowDropDown,
-                    contentDescription = if (expanded) "Collapse" else "Expand",
-                    modifier = Modifier.size(20.dp)
-                )
+        Surface(shape = RoundedCornerShape(28.dp), color = MaterialTheme.colorScheme.primaryContainer, modifier = Modifier.size(88.dp)) {
+            Box(contentAlignment = Alignment.Center) { Icon(Icons.Default.KeyboardArrowUp, null, modifier = Modifier.size(40.dp), tint = MaterialTheme.colorScheme.onPrimaryContainer) }
+        }
+        Spacer(Modifier.height(24.dp))
+        Text(localized(language, "Чем могу помочь?", "How can I help?"), style = MaterialTheme.typography.headlineSmall)
+        Spacer(Modifier.height(8.dp))
+        Text(localized(language, "Я работаю локально и использую инструменты только при необходимости.", "I work locally and use tools only when they are needed."), style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
+        Spacer(Modifier.height(24.dp))
+        suggestions.forEach { suggestion ->
+            AssistChip(onClick = { onSuggestion(suggestion) }, label = { Text(suggestion) })
+            Spacer(Modifier.height(8.dp))
+        }
+    }
+}
+
+@Composable
+private fun Composer(value: String, isGenerating: Boolean, language: String, onValueChange: (String) -> Unit, onSend: () -> Unit) {
+    Surface(tonalElevation = 3.dp, color = MaterialTheme.colorScheme.surface) {
+        Row(
+            modifier = Modifier.fillMaxWidth().navigationBarsPadding().imePadding().padding(horizontal = 16.dp, vertical = 12.dp),
+            verticalAlignment = Alignment.Bottom
+        ) {
+            TextField(
+                value = value, onValueChange = onValueChange, modifier = Modifier.weight(1f),
+                placeholder = { Text(localized(language, "Напишите сообщение", "Message Nano Agent")) },
+                shape = RoundedCornerShape(24.dp), maxLines = 4,
+                keyboardOptions = KeyboardOptions(imeAction = ImeAction.Send),
+                keyboardActions = KeyboardActions(onSend = { onSend() }),
+                colors = TextFieldDefaults.colors(unfocusedIndicatorColor = androidx.compose.ui.graphics.Color.Transparent, focusedIndicatorColor = androidx.compose.ui.graphics.Color.Transparent)
+            )
+            Spacer(Modifier.width(8.dp))
+            Surface(
+                modifier = Modifier.size(56.dp).clickable(enabled = value.isNotBlank() && !isGenerating, onClick = onSend),
+                shape = RoundedCornerShape(20.dp),
+                color = if (value.isNotBlank() && !isGenerating) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.surfaceVariant
+            ) { Box(contentAlignment = Alignment.Center) { Icon(Icons.AutoMirrored.Filled.Send, localized(language, "Отправить", "Send"), tint = if (value.isNotBlank() && !isGenerating) MaterialTheme.colorScheme.onPrimary else MaterialTheme.colorScheme.onSurfaceVariant) } }
+        }
+    }
+}
+
+@Composable
+private fun MessageBubble(message: ChatMessage, language: String) {
+    val isUser = message.sender == Sender.USER
+    Column(Modifier.fillMaxWidth(), horizontalAlignment = if (isUser) Alignment.End else Alignment.Start) {
+        if (message.steps.isNotEmpty()) { ThinkingCard(message.steps, language); Spacer(Modifier.height(8.dp)) }
+        if (message.content.isNotBlank() && message.content != "Thinking...") {
+            Surface(
+                shape = if (isUser) RoundedCornerShape(20.dp, 20.dp, 4.dp, 20.dp) else RoundedCornerShape(20.dp, 20.dp, 20.dp, 4.dp),
+                color = if (isUser) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.secondaryContainer,
+                contentColor = if (isUser) MaterialTheme.colorScheme.onPrimary else MaterialTheme.colorScheme.onSecondaryContainer,
+                modifier = Modifier.widthIn(max = 360.dp)
+            ) { Text(message.content, modifier = Modifier.padding(16.dp), style = MaterialTheme.typography.bodyLarge, lineHeight = 22.sp) }
+        }
+    }
+}
+
+@Composable
+private fun ThinkingCard(steps: List<AgentStep>, language: String) {
+    var expanded by remember { mutableStateOf(false) }
+    Card(modifier = Modifier.widthIn(max = 360.dp).clickable { expanded = !expanded }, colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant)) {
+        Column(Modifier.padding(12.dp)) {
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Icon(Icons.Default.Info, null, tint = MaterialTheme.colorScheme.primary); Spacer(Modifier.width(8.dp))
+                Text(localized(language, "Ход выполнения · ${steps.size}", "Activity · ${steps.size}"), style = MaterialTheme.typography.labelLarge, modifier = Modifier.weight(1f))
+                Icon(if (expanded) Icons.Default.KeyboardArrowUp else Icons.Default.ArrowDropDown, null)
             }
-            
-            AnimatedVisibility(visible = expanded) {
-                Column(
-                    modifier = Modifier.padding(top = 10.dp),
-                    verticalArrangement = Arrangement.spacedBy(8.dp)
-                ) {
-                    HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant)
-                    
+            AnimatedVisibility(expanded) {
+                Column(Modifier.padding(top = 10.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                    HorizontalDivider()
                     steps.forEach { step ->
-                        Row(
-                            modifier = Modifier.fillMaxWidth(),
-                            verticalAlignment = Alignment.Top
-                        ) {
-                            val icon = when (step.type) {
-                                StepType.THOUGHT -> Icons.Default.Info
-                                StepType.TOOL_CALL -> Icons.Default.PlayArrow
-                                StepType.TOOL_RESPONSE -> Icons.Default.Build
-                            }
-                            val iconColor = when (step.type) {
-                                StepType.THOUGHT -> MaterialTheme.colorScheme.tertiary
-                                StepType.TOOL_CALL -> MaterialTheme.colorScheme.primary
-                                StepType.TOOL_RESPONSE -> MaterialTheme.colorScheme.secondary
-                            }
-                            
-                            Icon(
-                                imageVector = icon,
-                                contentDescription = null,
-                                tint = iconColor,
-                                modifier = Modifier
-                                    .size(16.dp)
-                                    .padding(top = 2.dp)
-                            )
-                            Spacer(modifier = Modifier.width(8.dp))
-                            Column {
-                                Text(
-                                    text = step.summary,
-                                    style = MaterialTheme.typography.labelMedium,
-                                    color = MaterialTheme.colorScheme.onSurface
-                                )
-                                if (step.details.isNotEmpty()) {
-                                    Text(
-                                        text = step.details,
-                                        style = MaterialTheme.typography.bodySmall,
-                                        color = MaterialTheme.colorScheme.onSurfaceVariant,
-                                        fontSize = 11.sp,
-                                        modifier = Modifier.padding(top = 2.dp)
-                                    )
-                                }
-                            }
+                        Row(verticalAlignment = Alignment.Top) {
+                            Icon(if (step.type == StepType.TOOL_CALL) Icons.Default.PlayArrow else Icons.Default.Build, null, modifier = Modifier.size(18.dp), tint = MaterialTheme.colorScheme.primary)
+                            Spacer(Modifier.width(8.dp)); Column { Text(step.summary, style = MaterialTheme.typography.labelLarge); if (step.details.isNotBlank()) Text(step.details, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant) }
                         }
                     }
                 }
@@ -611,28 +331,30 @@ fun ThinkingHistoryCard(steps: List<AgentStep>, interfaceLang: String) {
 }
 
 @Composable
-fun LoadingBubble() {
-    Surface(
-        color = MaterialTheme.colorScheme.secondaryContainer,
-        shape = RoundedCornerShape(16.dp, 16.dp, 16.dp, 4.dp),
-        modifier = Modifier
-            .widthIn(max = 200.dp)
-            .alpha(0.7f)
-    ) {
-        Row(
-            modifier = Modifier.padding(12.dp),
-            verticalAlignment = Alignment.CenterVertically
-        ) {
-            CircularProgressIndicator(
-                modifier = Modifier.size(16.dp),
-                strokeWidth = 2.dp,
-                color = MaterialTheme.colorScheme.primary
-            )
-            Spacer(modifier = Modifier.width(8.dp))
-            Text(
-                text = "Thinking...",
-                style = MaterialTheme.typography.bodyMedium
-            )
-        }
+private fun GeneratingIndicator(language: String) {
+    Row(verticalAlignment = Alignment.CenterVertically) {
+        CircularProgressIndicator(Modifier.size(18.dp), strokeWidth = 2.dp); Spacer(Modifier.width(10.dp)); Text(localized(language, "Nano Agent думает…", "Nano Agent is thinking…"), color = MaterialTheme.colorScheme.onSurfaceVariant)
     }
 }
+
+@Composable
+private fun SettingsDialog(language: String, temperature: Float, thinkingDepth: Int, onDismiss: () -> Unit, onTemperatureChange: (Float) -> Unit, onDepthChange: (Int) -> Unit, onLanguageChange: (String) -> Unit) {
+    AlertDialog(
+        onDismissRequest = onDismiss, title = { Text(localized(language, "Параметры агента", "Agent settings")) },
+        text = { Column(verticalArrangement = Arrangement.spacedBy(18.dp)) {
+            SettingSlider(localized(language, "Температура", "Temperature"), String.format("%.1f", temperature), temperature, 0f..1f, 9) { onTemperatureChange(it) }
+            SettingSlider(localized(language, "Шаги рассуждения", "Reasoning steps"), thinkingDepth.toString(), thinkingDepth.toFloat(), 1f..10f, 8) { onDepthChange(it.toInt()) }
+            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                FilterChip(selected = language == "Russian", onClick = { onLanguageChange("Russian") }, label = { Text("Русский") })
+                FilterChip(selected = language == "English", onClick = { onLanguageChange("English") }, label = { Text("English") })
+            }
+        } }, confirmButton = { TextButton(onClick = onDismiss) { Text(localized(language, "Готово", "Done")) } }
+    )
+}
+
+@Composable
+private fun SettingSlider(label: String, valueLabel: String, value: Float, range: ClosedFloatingPointRange<Float>, steps: Int, onChange: (Float) -> Unit) {
+    Column { Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) { Text(label); Text(valueLabel, color = MaterialTheme.colorScheme.primary) }; Slider(value, onChange, valueRange = range, steps = steps) }
+}
+
+private fun localized(language: String, russian: String, english: String) = if (language == "Russian") russian else english

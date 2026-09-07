@@ -23,7 +23,14 @@ class JavaScriptTool(private val context: Context) : Tool {
             suspendCancellableCoroutine { continuation ->
                 try {
                     val webView = WebView(context)
-                    webView.settings.javaScriptEnabled = true
+                    webView.settings.apply {
+                        javaScriptEnabled = true
+                        allowFileAccess = false
+                        allowContentAccess = false
+                        javaScriptCanOpenWindowsAutomatically = false
+                        setSupportMultipleWindows(false)
+                    }
+                    continuation.invokeOnCancellation { webView.destroy() }
                     
                     // Use JSONObject.quote to safely escape the JavaScript string
                     val escapedCode = JSONObject.quote(code)
@@ -59,6 +66,7 @@ class JavaScriptTool(private val context: Context) : Tool {
                             } else {
                                 "undefined"
                             }
+                            webView.destroy()
                             continuation.resume(cleanResult)
                         }
                     }

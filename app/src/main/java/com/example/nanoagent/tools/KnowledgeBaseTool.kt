@@ -15,8 +15,12 @@ class KnowledgeBaseTool(private val dao: KnowledgeBaseDao) : Tool {
         }
 
         return try {
-            // Append wildcard to queries for better matches if using FTS
-            val formattedQuery = if (!query.contains("*")) "$query*" else query
+            // Build a conservative FTS query instead of passing user/model syntax through.
+            val terms = query.split(Regex("[^\\p{L}\\p{N}]+"))
+                .filter { it.isNotBlank() }
+                .take(6)
+            if (terms.isEmpty()) return "ERROR: Query contains no searchable terms."
+            val formattedQuery = terms.joinToString(" AND ") { "$it*" }
             val results = dao.search(formattedQuery)
 
             if (results.isEmpty()) {
@@ -30,14 +34,14 @@ class KnowledgeBaseTool(private val dao: KnowledgeBaseDao) : Tool {
                 if (fallbackResults.isEmpty()) {
                     "No matching wiki articles found for query: '$query'."
                 } else {
-                    val entriesStr = fallbackResults.joinToString("\n\n") { entry ->
-                        "Title: ${entry.title}\nContent: ${entry.content}"
+                    val entriesStr = fallbackResults.take(3).joinToString("\n\n") { entry ->
+                        "Title: ${entry.title}\nContent: ${entry.content.take(2_000)}"
                     }
                     "Found matching articles in database (fuzzy match):\n\n$entriesStr"
                 }
             } else {
-                val entriesStr = results.joinToString("\n\n") { entry ->
-                    "Title: ${entry.title}\nContent: ${entry.content}"
+                val entriesStr = results.take(3).joinToString("\n\n") { entry ->
+                    "Title: ${entry.title}\nContent: ${entry.content.take(2_000)}"
                 }
                 "Found matching articles in database (FTS match):\n\n$entriesStr"
             }
