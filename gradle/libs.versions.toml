@@ -8,10 +8,6 @@ espressoCore = "3.5.1"
 lifecycleRuntimeKtx = "2.8.1"
 activityCompose = "1.9.0"
 composeBom = "2024.05.00"
-ksp = "1.9.24-1.0.20"
-room = "2.6.1"
-ktor = "2.3.11"
-playServicesLocation = "21.2.0"
 coroutines = "1.8.1"
 aicore = "0.0.1-exp01"
 
@@ -34,22 +30,9 @@ androidx-compose-material3 = { group = "androidx.compose.material3", name = "mat
 # AI Core / Gemini Nano
 google-aicore = { group = "com.google.ai.edge.aicore", name = "aicore", version.ref = "aicore" }
 
-# Room (Local database with FTS)
-androidx-room-runtime = { group = "androidx.room", name = "room-runtime", version.ref = "room" }
-androidx-room-ktx = { group = "androidx.room", name = "room-ktx", version.ref = "room" }
-androidx-room-compiler = { group = "androidx.room", name = "room-compiler", version.ref = "room" }
-
-# Ktor (for Internet searches & web requests)
-ktor-client-core = { group = "io.ktor", name = "ktor-client-core", version.ref = "ktor" }
-ktor-client-okhttp = { group = "io.ktor", name = "ktor-client-okhttp", version.ref = "ktor" }
-
-# Play Services Location
-play-services-location = { group = "com.google.android.gms", name = "play-services-location", version.ref = "playServicesLocation" }
-
 # Kotlin Coroutines
 kotlinx-coroutines-android = { group = "org.jetbrains.kotlinx", name = "kotlinx-coroutines-android", version.ref = "coroutines" }
 
 [plugins]
 android-application = { id = "com.android.application", version.ref = "agp" }
 kotlin-android = { id = "org.jetbrains.kotlin.android", version.ref = "kotlin" }
-kotlin-ksp = { id = "com.google.devtools.ksp", version.ref = "ksp" }

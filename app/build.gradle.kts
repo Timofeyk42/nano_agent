@@ -1,7 +1,6 @@
 plugins {
     alias(libs.plugins.android.application)
     alias(libs.plugins.kotlin.android)
-    alias(libs.plugins.kotlin.ksp)
 }
 
 android {
@@ -37,7 +36,6 @@ android {
     kotlinOptions {
         jvmTarget = "1.8"
         freeCompilerArgs += listOf(
-            "-opt-in=kotlinx.coroutines.ExperimentalCoroutinesApi",
             "-opt-in=androidx.compose.material3.ExperimentalMaterial3Api"
         )
     }
@@ -67,19 +65,7 @@ dependencies {
     // AI Core & Gemini Nano on-device SDK
     implementation(libs.google.aicore)
 
-    // Room (Local database with FTS for Knowledge Base)
-    implementation(libs.androidx.room.runtime)
-    implementation(libs.androidx.room.ktx)
-    ksp(libs.androidx.room.compiler)
-
-    // Ktor for networking
-    implementation(libs.ktor.client.core)
-    implementation(libs.ktor.client.okhttp)
-
-    // Play services Location
-    implementation(libs.play.services.location)
-
-    // Coroutines
+    // UI state and asynchronous local inference
     implementation(libs.kotlinx.coroutines.android)
 
     testImplementation(libs.junit)
